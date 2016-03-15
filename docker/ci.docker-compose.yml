@@ -1,0 +1,38 @@
+sfmrabbit:
+    image: rabbitmq@sha256:397382d2b222f3a298a6c74e93f348fb16f9a7fde2c02ba14122624d852daae3
+    #RabbatMQ 3-management
+    environment:
+        - RABBITMQ_DEFAULT_USER=sfm_user
+        - RABBITMQ_DEFAULT_PASS=password
+#sfmflickrharvester:
+#    image: gwul/sfm-flickr-harvester:dev
+#    links:
+#        - sfmrabbit:mq
+#    volumes:
+#        - "..:/opt/sfm-flickr-harvester"
+#    environment:
+#        - FLICKR_KEY
+#        - FLICKR_SECRET
+#    command: bash -c "pip install -r requirements/master.txt --upgrade && appdeps.py --port-wait mq:5672 && python flickr_harvester.py --debug=True service mq sfm_user password"
+sfmheritrix:
+#    images: gwul/sfm-heritrix
+    build: heritrix
+    ports:
+        - "8443:8443"
+    environment:
+        - HERITRIX_USER=sfm_user
+        - HERITRIX_PASSWORD=password
+sfmwebharvester:
+    build: dev
+#    image: gwul/sfm-web-harvester:dev
+    links:
+        - sfmrabbit:mq
+        - sfmheritrix:heritrix
+    volumes:
+        - "..:/opt/sfm-web-harvester"
+    environment:
+        - DEBUG=True
+        - HERITRIX_CONTACT_URL=http://library.gwu.edu
+    volumes_from:
+        - sfmheritrix
+    command: bash -c "pip install -r requirements/master.txt --upgrade && appdeps.py --port-wait mq:5672 --port-wait heritrix:8443 && python web_harvester.py --debug=True service mq sfm_user password http://heritrix:8443 sfm_user password http://library.gwu.edu"
