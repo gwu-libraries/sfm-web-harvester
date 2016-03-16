@@ -7,32 +7,97 @@ import time
 from datetime import datetime
 from kombu import Connection, Exchange, Queue, Producer
 from sfmutils.harvester import HarvestResult, EXCHANGE
+from mock import patch, call, MagicMock
+from web_harvester import WebHarvester
+import threading
+import hapy
+import os
+
+
+class TestWebHarvester(tests.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    @patch("web_harvester.Hapy", autospec=True)
+    def test_harvest(self, mock_hapy_cls):
+        mock_hapy = MagicMock(spec=hapy.Hapy)
+        mock_hapy_cls.side_effect = [mock_hapy]
+        mock_hapy.get_job_info.return_value = {
+            "job": {"availableActions": {"value": "build, launch, unpause"}, "crawlControllerState": "FINISHED",
+                    "sizeTotalsReport": {"totalCount": "10"}}}
+
+        harvester = WebHarvester("http://test", "test_username", "test_password", "http://library.gwu.edu",
+                                 heritrix_data_path=self.temp_dir)
+        harvester.harvest_result = HarvestResult()
+        harvester.harvest_result_lock = threading.Lock()
+        harvester.message = {
+            "id": "test:1",
+            "parent_id": "sfmui:45",
+            "type": "web",
+            "seeds": [
+                {
+                    "token": "http://www.gwu.edu/"
+                },
+                {
+                    "token": "http://library.gwu.edu/"
+                }
+            ],
+            "collection": {
+                "id": "test_collection",
+                "path": "/collections/test_collection"
+            },
+        }
+
+        harvester.harvest_seeds()
+
+        mock_hapy_cls.assert_called_once_with("http://test", username="test_username", password="test_password")
+        # print mock_hapy.mock_calls
+        self.assertEqual(call.teardown_job("sfm"), mock_hapy.mock_calls[0])
+        self.assertEqual(call.create_job("sfm"), mock_hapy.mock_calls[1])
+        self.assertEqual("submit_configuration", mock_hapy.mock_calls[2][0])
+        self.assertEqual("sfm", mock_hapy.mock_calls[2][1][0])
+        config = mock_hapy.mock_calls[2][1][1]
+        self.assertTrue(config.startswith("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!--\n  HERITRIX 3 CRAWL JOB"))
+        self.assertTrue("http://library.gwu.edu" in config)
+        self.assertTrue(self.temp_dir in config)
+        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[3])
+        self.assertEqual(call.build_job('sfm'), mock_hapy.mock_calls[4])
+        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[5])
+        self.assertEqual(call.launch_job('sfm'), mock_hapy.mock_calls[6])
+        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[7])
+        self.assertEqual(call.unpause_job('sfm'), mock_hapy.mock_calls[8])
+        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[9])
+        self.assertEqual(call.terminate_job('sfm'), mock_hapy.mock_calls[10])
+        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[11])
+
+        # Check harvest result
+        self.assertTrue(harvester.harvest_result.success)
+        self.assertEqual(10, harvester.harvest_result.summary["web resources"])
+
 
 @unittest.skipIf(not tests.integration_env_available, "Skipping test since integration env not available.")
-class TestTwitterHarvesterIntegration(tests.TestCase):
+class TestWebHarvesterIntegration(tests.TestCase):
     def _create_connection(self):
         return Connection(hostname="mq", userid=tests.mq_username, password=tests.mq_password)
 
     def setUp(self):
         self.exchange = Exchange(EXCHANGE, type="topic")
-        self.result_queue = Queue(name="result_queue", routing_key="harvest.status.twitter.*", exchange=self.exchange,
+        self.result_queue = Queue(name="result_queue", routing_key="harvest.status.*", exchange=self.exchange,
                                   durable=True)
-        # self.web_harvest_queue = Queue(name="web_harvest_queue", routing_key="harvest.start.web", exchange=self.exchange)
         self.warc_created_queue = Queue(name="warc_created_queue", routing_key="warc_created", exchange=self.exchange)
         web_harvester_queue = Queue(name="web_harvester", exchange=self.exchange)
-        # twitter_rest_harvester_queue = Queue(name="twitter_rest_harvester", exchange=self.exchange)
         with self._create_connection() as connection:
             self.result_queue(connection).declare()
             self.result_queue(connection).purge()
-            # self.web_harvest_queue(connection).declare()
-            # self.web_harvest_queue(connection).purge()
             self.warc_created_queue(connection).declare()
             self.warc_created_queue(connection).purge()
             # Declaring to avoid race condition with harvester starting.
             web_harvester_queue(connection).declare()
             web_harvester_queue(connection).purge()
-            # twitter_rest_harvester_queue(connection).declare()
-            # twitter_rest_harvester_queue(connection).purge()
 
         self.collection_path = tempfile.mkdtemp()
 
@@ -50,6 +115,9 @@ class TestTwitterHarvesterIntegration(tests.TestCase):
                 },
                 {
                     "token": "http://library.gwu.edu/"
+                },
+                {
+                    "token": "xhttp://library.gwu.edu/"
                 }
             ],
             "collection": {
@@ -79,10 +147,9 @@ class TestTwitterHarvesterIntegration(tests.TestCase):
             # Success
             self.assertEqual("completed success", result_msg["status"])
             # Some web resources
-            self.assertEqual(2, result_msg["summary"]["web resources"])
+            self.assertEqual(6, result_msg["summary"]["web resources"])
 
             # Warc created message.
-            # method_frame, header_frame, warc_created_body = self.channel.basic_get(self.warc_created_queue)
             bound_warc_created_queue = self.warc_created_queue(connection)
             message_obj = bound_warc_created_queue.get(no_ack=True)
             self.assertIsNotNone(message_obj, "No warc created message.")

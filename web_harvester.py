@@ -2,24 +2,21 @@ from sfmutils.harvester import HarvestResult, STATUS_SUCCESS, STATUS_FAILURE, ST
 from sfmutils.consumer import BaseConsumer, MqConfig, EXCHANGE
 import datetime
 import logging
-import codecs
 import json
 import argparse
 import sys
-import hapy
-import ssl
+from hapy import Hapy, HapyException
 import codecs
 import shutil
 import time
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
-# from sfmutils.result import BaseResult, Msg, STATUS_SUCCESS, STATUS_FAILURE, STATUS_RUNNING
 import uuid
-from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.poolmanager import PoolManager
 import hashlib
 import os
 import re
+import threading
 
 log = logging.getLogger(__name__)
 
@@ -31,16 +28,22 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 
 class WebHarvester(BaseConsumer):
-    def __init__(self, heritrix_url, heritrix_username, heritrix_password, contact_url, mq_config=None):
+    def __init__(self, heritrix_url, heritrix_username, heritrix_password, contact_url, mq_config=None,
+                 heritrix_data_path="/heritrix-data"):
         BaseConsumer.__init__(self, mq_config=mq_config)
         with open("crawler-beans.cxml", 'r') as f:
             heritrix_config = f.read()
-        self.heritrix_config = heritrix_config.replace("HERITRIX_CONTACT_URL", contact_url)
+        self.heritrix_config = heritrix_config.replace("HERITRIX_CONTACT_URL", contact_url).replace(
+            "HERITRIX_DATA_PATH", heritrix_data_path)
         log.debug("Heritrix config is: %s", self.heritrix_config)
-        # self.client = hapy.Hapy('https://heritrix:8443', username="sfm_user", password="password")
-        self.client = hapy.Hapy(heritrix_url, username=heritrix_username, password=heritrix_password)
+        self.client = Hapy(heritrix_url, username=heritrix_username, password=heritrix_password)
         self.harvest_result = None
-        self.warc_temp_dir = "/heritrix-data/XXXXXXX"
+        self.harvest_result_lock = None
+        # May want to set this for testing purposes.
+        self.heritrix_data_path = heritrix_data_path
+        self.warc_temp_dir = os.path.join(self.heritrix_data_path, "jobs/sfm/latest/warcs")
+        self.routing_key = None
+        self.message = None
 
     def on_message(self):
         assert self.message
@@ -48,17 +51,26 @@ class WebHarvester(BaseConsumer):
         log.info("Harvesting by message")
 
         self.harvest_result = HarvestResult()
+        self.harvest_result_lock = threading.Lock()
         self.harvest_result.started = datetime.datetime.now()
 
-        with codecs.open("/heritrix-data/seeds.txt", "w") as f:
+        self.harvest_seeds()
+
+        self.harvest_result.ended = datetime.datetime.now()
+        self._process()
+
+    def harvest_seeds(self):
+        with codecs.open(os.path.join(self.heritrix_data_path, "seeds.txt"), "w") as f:
             for url in [s["token"] for s in self.message["seeds"]]:
                 f.write(url)
                 f.write("\n")
 
-        # TODO: Look into dedupe
-
         log.debug("Tearing down")
-        self.client.teardown_job(JOB_NAME)
+        try:
+            self.client.teardown_job(JOB_NAME)
+        except HapyException:
+            # Job doesn't exist
+            pass
 
         log.debug("Creating job")
         self.client.create_job(JOB_NAME)
@@ -77,17 +89,19 @@ class WebHarvester(BaseConsumer):
 
         log.info("Unpausing")
         self.client.unpause_job(JOB_NAME)
-        wait_for(self.client, JOB_NAME, controller_state="FINISHED")
+        # Wait up to a day
+        wait_for(self.client, JOB_NAME, controller_state="FINISHED", retries=60*60*24)
 
         log.info("Terminating")
         self.client.terminate_job(JOB_NAME)
 
-        self.harvest_result.ended = datetime.datetime.now()
+        log.info("Harvesting done")
 
-        # print json.dumps(h.get_job_info(JOB_NAME), indent=4)
+        job_info = self.client.get_job_info(JOB_NAME)
+        self.harvest_result.increment_summary("web resources",
+                                              increment=int(job_info["job"]["sizeTotalsReport"]["totalCount"]))
 
-
-    # TODO: Refactor everything below!!!!
+    # TODO: Refactor everything below
     def harvest_from_file(self, filepath, routing_key=None):
         """
         Performs a harvest based on the a harvest start message contained in the
@@ -133,23 +147,23 @@ class WebHarvester(BaseConsumer):
                     self._send_warc_created_message(harvest_id, collection_id, collection_path,
                                                     uuid.uuid4().hex, dest_warc_filepath)
 
-            # TODO: Persist summary so that can resume
+                # TODO: Persist summary so that can resume
 
-            if not self.harvest_result.success:
-                status = STATUS_FAILURE
-            elif not done:
-                status = STATUS_RUNNING
-            else:
-                status = STATUS_SUCCESS
-            self._send_status_message(self.routing_key, harvest_id,
-                                      self.harvest_result, status)
-            if not done:
-                # Since these were sent, clear them.
-                self.harvest_result.errors = []
-                self.harvest_result.infos = []
-                self.harvest_result.warnings = []
-                self.harvest_result.token_updates = []
-                self.harvest_result.uids = []
+                if not self.harvest_result.success:
+                    status = STATUS_FAILURE
+                elif not done:
+                    status = STATUS_RUNNING
+                else:
+                    status = STATUS_SUCCESS
+                self._send_status_message(self.routing_key, harvest_id,
+                                          self.harvest_result, status)
+                if not done:
+                    # Since these were sent, clear them.
+                    self.harvest_result.errors = []
+                    self.harvest_result.infos = []
+                    self.harvest_result.warnings = []
+                    self.harvest_result.token_updates = []
+                    self.harvest_result.uids = []
 
     @staticmethod
     def _list_warcs(path):
@@ -185,7 +199,7 @@ class WebHarvester(BaseConsumer):
                 "path": collection_path
             }
         }
-    #ADDED CHECK IF URLS
+    # ADDED CHECK IF URLS
         if urls:
             for url in urls:
                 message["seeds"].append({"token": url})
@@ -237,6 +251,20 @@ class WebHarvester(BaseConsumer):
         }
         self._publish_message("warc_created", message)
 
+    # TODO: This is in BaseConsumer, but not in the version in master yet.
+    def _publish_message(self, routing_key, message):
+        message_body = json.dumps(message, indent=4)
+        if self.mq_config:
+            log.debug("Sending message to %s with routing_key %s. The body is: %s", self.exchange.name, routing_key,
+                      json.dumps(message, indent=4))
+            self.producer.publish(body=message,
+                                  routing_key=routing_key,
+                                  retry=True,
+                                  exchange=self.exchange)
+        else:
+            log.debug("Skipping sending message to sfm_exchange with routing_key %s. The body is: %s",
+                      routing_key, message_body)
+
 
 def wait_for(h, job_name, available_action=None, controller_state=None, retries=60):
     assert available_action or controller_state
@@ -244,11 +272,9 @@ def wait_for(h, job_name, available_action=None, controller_state=None, retries=
         log.debug("Waiting for available action %s", available_action)
     else:
         log.debug("Waiting for controller state %s", controller_state)
-    info = h.get_job_info(job_name)
     count = 0
     while count <= retries:
         info = h.get_job_info(job_name)
-        print info['job'].get('crawlControllerState')
         if available_action and available_action in info['job']['availableActions']['value']:
             break
         elif controller_state and controller_state == info['job'].get('crawlControllerState'):
@@ -259,40 +285,6 @@ def wait_for(h, job_name, available_action=None, controller_state=None, retries=
         raise Exception("Timed out waiting")
 
 if __name__ == "__main__":
-    # logging.basicConfig(format='%(asctime)s: %(name)s --> %(message)s',
-    #                     level=logging.DEBUG)
-    #
-    # with codecs.open("/heritrix-data/seeds.txt", "w") as f:
-    #     f.write("http://library.gwu.edu\n")
-    # h = hapy.Hapy('https://heritrix:8443', username="sfm_user", password="password")
-    # print h.get_info()
-    #
-    # # TODO: Look into dedupe
-    #
-    # name = "sfm"
-    # with open("crawler-beans.cxml", 'r') as fd:
-    #     config = fd.read()
-    # config = config.replace("HERITRIX_CONTACT_URL", "http://library.gwu.edu")
-    # log.info("Tearing down")
-    # h.teardown_job(name)
-    # log.info("Creating job")
-    # h.create_job(name)
-    # log.info("Submitting configuration")
-    # h.submit_configuration(name, config)
-    # wait_for(h, name, available_action='build')
-    # log.info("Building job")
-    # h.build_job(name)
-    # wait_for(h, name, available_action='launch')
-    # log.info("Launching")
-    # h.launch_job(name)
-    # wait_for(h, name, available_action='unpause')
-    # log.info("Unpausing")
-    # h.unpause_job(name)
-    # wait_for(h, name, controller_state="FINISHED")
-    # log.info("Terminating")
-    # h.terminate_job(name)
-    # print json.dumps(h.get_job_info(name), indent=4)
-    # quit()
 
     # Logging
     logging.basicConfig(format='%(asctime)s: %(name)s --> %(message)s', level=logging.DEBUG)
@@ -301,8 +293,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", type=lambda v: v.lower() in ("yes", "true", "t", "1"), nargs="?",
                         default="False", const="True")
-    # parser.add_argument("--debug-http", type=lambda v: v.lower() in ("yes", "true", "t", "1"), nargs="?",
-    #                     default="False", const="True")
 
     subparsers = parser.add_subparsers(dest="command")
 
@@ -333,14 +323,12 @@ if __name__ == "__main__":
     # Logging
     logging.basicConfig(format='%(asctime)s: %(name)s --> %(message)s',
                         level=logging.DEBUG if args.debug else logging.INFO)
-    # logging.getLogger("requests").setLevel(logging.debug if args.debug_http else logging.INFO)
-    # logging.getLogger("requests_oauthlib").setLevel(logging.debug if args.debug_http else logging.INFO)
-    # logging.getLogger("oauthlib").setLevel(logging.debug if args.debug_http else logging.INFO)
+    logging.getLogger("requests").setLevel(logging.DEBUG if args.debug else logging.INFO)
 
     if args.command == "service":
         harvester = WebHarvester(args.heritrix_url, args.heritrix_username, args.heritrix_password, args.contact_url,
                                  mq_config=MqConfig(args.host, args.username, args.password, EXCHANGE,
-                                           {QUEUE: (ROUTING_KEY,)}))
+                                                    {QUEUE: (ROUTING_KEY,)}))
         harvester.run()
     elif args.command == "seed":
         main_mq_config = MqConfig(args.host, args.username, args.password, EXCHANGE, None) \

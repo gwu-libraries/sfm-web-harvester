@@ -87,7 +87,7 @@ http://example.example/example
  <bean id="seeds" class="org.archive.modules.seeds.TextSeedModule">
   <property name="textSource">
    <bean class="org.archive.spring.ConfigFile">
-     <property name="path" value="/heritrix-data/seeds.txt" />
+     <property name="path" value="HERITRIX_DATA_PATH/seeds.txt" />
    </bean>
   </property>
   <property name='sourceTagSeeds' value='false'/>
