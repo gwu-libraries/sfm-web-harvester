@@ -15,4 +15,4 @@ WORKDIR /opt/sfm-web-harvester
 RUN pip install -r requirements/master.txt
 RUN pip install appdeps
 CMD appdeps.py --port-wait mq:5672 --port-wait heritrix:8443 \
-    && python web_harvester.py --debug=$DEBUG service mq $MQ_ENV_RABBITMQ_DEFAULT_USER $MQ_ENV_RABBITMQ_DEFAULT_PASS https://heritrix:8443 $HERITRIX_ENV_HERITRIX_USER HERITRIX_ENV_HERITRIX_PASSWORD $HERITRIX_CONTACT_URL
+    && python web_harvester.py --debug=$DEBUG service mq $MQ_ENV_RABBITMQ_DEFAULT_USER $MQ_ENV_RABBITMQ_DEFAULT_PASS https://heritrix:8443 $HERITRIX_ENV_HERITRIX_USER $HERITRIX_ENV_HERITRIX_PASSWORD $HERITRIX_CONTACT_URL
