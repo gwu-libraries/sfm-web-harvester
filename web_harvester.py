@@ -90,7 +90,7 @@ class WebHarvester(BaseConsumer):
         log.info("Unpausing")
         self.client.unpause_job(JOB_NAME)
         # Wait up to a day
-        wait_for(self.client, JOB_NAME, controller_state="FINISHED", retries=60*60*24)
+        wait_for(self.client, JOB_NAME, controller_state="FINISHED", retries=60*60*24/30, sleep_secs=30)
 
         log.info("Terminating")
         self.client.terminate_job(JOB_NAME)
@@ -266,7 +266,7 @@ class WebHarvester(BaseConsumer):
                       routing_key, message_body)
 
 
-def wait_for(h, job_name, available_action=None, controller_state=None, retries=60):
+def wait_for(h, job_name, available_action=None, controller_state=None, retries=60, sleep_secs=1):
     assert available_action or controller_state
     if available_action:
         log.debug("Waiting for available action %s", available_action)
@@ -280,7 +280,7 @@ def wait_for(h, job_name, available_action=None, controller_state=None, retries=
         elif controller_state and controller_state == info['job'].get('crawlControllerState'):
             break
         count += 1
-        time.sleep(1)
+        time.sleep(sleep_secs)
     if count == retries:
         raise Exception("Timed out waiting")
 
