@@ -2,11 +2,16 @@ FROM java@sha256:ea18d1cf75d819b8e1b2b9907d671703b8139598829492c315b0305205a2d0f
 #openjdk-7
 MAINTAINER Justin Littman <justinlittman@gwu.edu>
 
-#IA build server is unreliable, so adding instead of downloading.
-ADD heritrix-3.2.0-dist.tar.gz /tmp/
-RUN ls /tmp
-RUN mv /tmp/heritrix-3.2.0 /opt/heritrix
-#RUN tar xvfz /tmp/heritrix-3.2.0-dist.tar.gz -C /opt/heritrix
+RUN apt-get update && apt-get install -y \
+    zip=3.0-8 \
+    maven=3.0.5-3
+WORKDIR /tmp
+ADD https://github.com/Landsbokasafn/heritrix3/archive/LBS-2015-01.zip /tmp/
+RUN unzip LBS-2015-01.zip
+WORKDIR /tmp/heritrix3-LBS-2015-01
+RUN mvn package -Dmaven.test.skip=true
+RUN unzip dist/target/heritrix-3.3.0-LBS-2015-01-dist.zip -d /tmp
+RUN mv /tmp/heritrix-3.3.0-LBS-2015-01 /opt/heritrix
 WORKDIR /opt/heritrix
 VOLUME /heritrix-data
 EXPOSE 8443
