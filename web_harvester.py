@@ -12,7 +12,6 @@ import time
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import uuid
-from requests.packages.urllib3.poolmanager import PoolManager
 import hashlib
 import os
 import re
@@ -275,6 +274,8 @@ def wait_for(h, job_name, available_action=None, controller_state=None, retries=
     count = 0
     while count <= retries:
         info = h.get_job_info(job_name)
+        log.debug("Crawl controller state: %s. Available actions: %s.", info['job'].get('crawlControllerState'),
+                  info['job']['availableActions']['value'])
         if available_action and available_action in info['job']['availableActions']['value']:
             break
         elif controller_state and controller_state == info['job'].get('crawlControllerState'):
