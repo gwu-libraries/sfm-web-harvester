@@ -1,5 +1,5 @@
 # sfm-web-harvester
-A wrapper around Heritrix for harvesting web content as part of [Social Feed Manager](http://sfm.readthedocs.org).
+A wrapper around Heritrix for harvesting web content as part of [Social Feed Manager](https://gwu-libraries.github.io/sfm-ui).
 
 [![Build Status](https://travis-ci.org/gwu-libraries/sfm-web-harvester.svg?branch=master)](https://travis-ci.org/gwu-libraries/sfm-web-harvester)
 
