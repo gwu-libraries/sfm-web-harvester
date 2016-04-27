@@ -190,9 +190,9 @@ http://example.example/example
   <!-- <property name="canonicalizationPolicy">
         <ref bean="canonicalizationPolicy" />
        </property> -->
-  <!-- <property name="queueAssignmentPolicy">
+       <property name="queueAssignmentPolicy">
         <ref bean="queueAssignmentPolicy" />
-       </property> -->
+       </property>
   <!-- <property name="uriPrecedencePolicy">
         <ref bean="uriPrecedencePolicy" />
        </property> -->
@@ -461,6 +461,20 @@ http://example.example/example
  </property>
 </bean>
 
+<!-- notPolite: any URI to which this sheet's settings are applied
+     will cause its queue to take short politeness snoozes and use
+     multiple queues. -->
+<bean id='notPolite' class='org.archive.spring.Sheet'>
+ <property name='map'>
+  <map>
+   <entry key='disposition.delayFactor' value='0'/>
+   <entry key='disposition.minDelayMs' value='1000'/>
+   <entry key='disposition.maxDelayMs' value='1000'/>
+   <entry key='queueAssignmentPolicy.parallelQueues' value='5'/>
+  </map>
+ </property>
+</bean>
+
 <!-- highPrecedence: any URI to which this sheet's settings are applied
      will give its containing queue a slightly-higher than default
      queue precedence value. That queue will then be preferred over
@@ -498,6 +512,28 @@ http://example.example/example
  </property>
 </bean>
 -->
+
+<!--
+    This configures more aggressive crawling of certain sites.
+-->
+<bean class='org.archive.crawler.spring.SurtPrefixesSheetAssociation'>
+ <property name='surtPrefixes'>
+  <list>
+   <value>http://(com,twitter,</value>
+   <value>http://(co,t,</value>
+   <value>http://(com,twimg,</value>
+   <value>http://(com,flickr,</value>
+   <value>http://(com,staticflickr,</value>
+   <value>http://(ly,bit,</value>
+  </list>
+ </property>
+ <property name='targetSheetNames'>
+  <list>
+   <value>notPolite</value>
+  </list>
+ </property>
+</bean>
+
 
  <!--
    OPTIONAL BUT RECOMMENDED BEANS
@@ -552,14 +588,14 @@ http://example.example/example
 
 
  <!-- QUEUE ASSIGNMENT POLICY -->
- <!--
  <bean id="queueAssignmentPolicy"
    class="org.archive.crawler.frontier.SurtAuthorityQueueAssignmentPolicy">
+ <!--
   <property name="forceQueueAssignment" value="" />
   <property name="deferToPrevious" value="true" />
+  -->
   <property name="parallelQueues" value="1" />
  </bean>
- -->
 
  <!-- URI PRECEDENCE POLICY -->
  <!--

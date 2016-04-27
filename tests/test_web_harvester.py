@@ -27,8 +27,10 @@ class TestWebHarvester(tests.TestCase):
         mock_hapy = MagicMock(spec=hapy.Hapy)
         mock_hapy_cls.side_effect = [mock_hapy]
         mock_hapy.get_job_info.return_value = {
-            "job": {"availableActions": {"value": "build, launch, unpause"}, "crawlControllerState": "FINISHED",
-                    "sizeTotalsReport": {"totalCount": "10"}}}
+            "job": {"availableActions": {"value": "build, launch, unpause"},
+                    "crawlControllerState": "FINISHED",
+                    "sizeTotalsReport": {"totalCount": "10"},
+                    "uriTotalsReport": {"downloadedUriCount": 125, "totalUriCount": 125}}}
 
         harvester = WebHarvester("http://test", "test_username", "test_password", "http://library.gwu.edu",
                                  heritrix_data_path=self.temp_dir)
