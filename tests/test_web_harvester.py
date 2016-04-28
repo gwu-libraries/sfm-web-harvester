@@ -48,9 +48,9 @@ class TestWebHarvester(tests.TestCase):
                     "token": "http://library.gwu.edu/"
                 }
             ],
+            "path": "/collections/test_collection",
             "collection": {
-                "id": "test_collection",
-                "path": "/collections/test_collection"
+                "id": "test_collection"
             },
         }
 
@@ -101,10 +101,10 @@ class TestWebHarvesterIntegration(tests.TestCase):
             web_harvester_queue(connection).declare()
             web_harvester_queue(connection).purge()
 
-        self.collection_path = tempfile.mkdtemp()
+        self.path = tempfile.mkdtemp()
 
     def tearDown(self):
-        shutil.rmtree(self.collection_path, ignore_errors=True)
+        shutil.rmtree(self.path, ignore_errors=True)
 
     def test_harvest(self):
         harvest_msg = {
@@ -122,9 +122,9 @@ class TestWebHarvesterIntegration(tests.TestCase):
                     "token": "xhttp://library.gwu.edu/"
                 }
             ],
+            "path": self.path,
             "collection": {
-                "id": "test_collection",
-                "path": self.collection_path
+                "id": "test_collection"
 
             }
         }
@@ -149,7 +149,7 @@ class TestWebHarvesterIntegration(tests.TestCase):
             # Success
             self.assertEqual("completed success", result_msg["status"])
             # Some web resources
-            self.assertEqual(6, result_msg["summary"]["web resources"])
+            self.assertEqual(8, result_msg["summary"]["web resources"])
 
             # Warc created message.
             bound_warc_created_queue = self.warc_created_queue(connection)

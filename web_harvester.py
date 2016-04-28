@@ -32,7 +32,6 @@ class WebHarvester(BaseHarvester):
         self.client = Hapy(heritrix_url, username=heritrix_username, password=heritrix_password)
         # May want to set this for testing purposes.
         self.heritrix_data_path = heritrix_data_path
-        self.warc_temp_dir = os.path.join(self.heritrix_data_path, "jobs/sfm/latest/warcs")
 
     def harvest_seeds(self):
         with codecs.open(os.path.join(self.heritrix_data_path, "seeds.txt"), "w") as f:
@@ -75,6 +74,9 @@ class WebHarvester(BaseHarvester):
         job_info = self.client.get_job_info(JOB_NAME)
         self.harvest_result.increment_summary("web resources",
                                               increment=int(job_info["job"]["sizeTotalsReport"]["totalCount"]))
+
+    def _create_warc_temp_dir(self):
+        return os.path.join(self.heritrix_data_path, "jobs/sfm/latest/warcs")
 
 
 def wait_for(h, job_name, available_action=None, controller_state=None, retries=60, sleep_secs=1):
