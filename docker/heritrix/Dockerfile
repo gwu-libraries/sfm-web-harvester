@@ -2,16 +2,19 @@ FROM java@sha256:ea18d1cf75d819b8e1b2b9907d671703b8139598829492c315b0305205a2d0f
 #openjdk-7
 MAINTAINER Justin Littman <justinlittman@gwu.edu>
 
+ENV lbs_version LBS-2016-02
+RUN echo "deb http://ftp.debian.org/debian jessie-backports main" >> /etc/apt/sources.list
 RUN apt-get update && apt-get install -y \
-    zip=3.0-8 \
-    maven=3.0.5-3
+    zip=3.0-8 && \
+    apt-get install -y -t jessie-backports maven=3.3.*
 WORKDIR /tmp
-ADD https://github.com/Landsbokasafn/heritrix3/archive/LBS-2015-01.zip /tmp/
-RUN unzip LBS-2015-01.zip
-WORKDIR /tmp/heritrix3-LBS-2015-01
+ADD https://github.com/Landsbokasafn/heritrix3/archive/${lbs_version}.zip /tmp/
+RUN unzip ${lbs_version}.zip
+WORKDIR /tmp/heritrix3-${lbs_version}
 RUN mvn package -Dmaven.test.skip=true
-RUN unzip dist/target/heritrix-3.3.0-LBS-2015-01-dist.zip -d /tmp
-RUN mv /tmp/heritrix-3.3.0-LBS-2015-01 /opt/heritrix
+# Note:  Using RC1 for now.
+RUN unzip dist/target/heritrix-3.3.0-${lbs_version}-RC1-dist.zip -d /tmp
+RUN mv /tmp/heritrix-3.3.0-${lbs_version}-RC1 /opt/heritrix
 WORKDIR /opt/heritrix
 VOLUME /heritrix-data
 EXPOSE 8443
