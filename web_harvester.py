@@ -21,8 +21,8 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 class WebHarvester(BaseHarvester):
     def __init__(self, heritrix_url, heritrix_username, heritrix_password, contact_url,
-                 heritrix_data_path="/heritrix-data", process_interval_secs=1200, mq_config=None, debug=False):
-        BaseHarvester.__init__(self, mq_config=mq_config, process_interval_secs=process_interval_secs, debug=debug,
+                 heritrix_data_path="/heritrix-data", mq_config=None, debug=False):
+        BaseHarvester.__init__(self, mq_config=mq_config, debug=debug,
                                use_warcprox=False)
         with open("crawler-beans.cxml", 'r') as f:
             heritrix_config = f.read()
