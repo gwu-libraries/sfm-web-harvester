@@ -4,7 +4,7 @@ import unittest
 import shutil
 import tempfile
 import time
-from datetime import datetime
+from datetime import datetime, date
 from kombu import Connection, Exchange, Queue, Producer
 from sfmutils.harvester import HarvestResult, EXCHANGE
 from mock import patch, call, MagicMock
@@ -78,7 +78,7 @@ class TestWebHarvester(tests.TestCase):
 
         # Check harvest result
         self.assertTrue(harvester.harvest_result.success)
-        self.assertEqual(10, harvester.harvest_result.summary["web resources"])
+        self.assertEqual(10, harvester.harvest_result.stats_summary()["web resources"])
 
 
 @unittest.skipIf(not tests.integration_env_available, "Skipping test since integration env not available.")
@@ -149,7 +149,7 @@ class TestWebHarvesterIntegration(tests.TestCase):
             # Success
             self.assertEqual("completed success", result_msg["status"])
             # Some web resources
-            self.assertEqual(8, result_msg["summary"]["web resources"])
+            self.assertEqual(8, result_msg["stats"][date.today().isoformat()]["web resources"])
 
             # Warc created message.
             bound_warc_created_queue = self.warc_created_queue(connection)

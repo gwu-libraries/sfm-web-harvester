@@ -72,8 +72,8 @@ class WebHarvester(BaseHarvester):
         log.info("Harvesting done")
 
         job_info = self.client.get_job_info(JOB_NAME)
-        self.harvest_result.increment_summary("web resources",
-                                              increment=int(job_info["job"]["sizeTotalsReport"]["totalCount"]))
+        self.harvest_result.increment_stats("web resources",
+                                            count=int(job_info["job"]["sizeTotalsReport"]["totalCount"]))
 
     def _create_warc_temp_dir(self):
         return os.path.join(self.heritrix_data_path, "jobs/sfm/latest/warcs")
