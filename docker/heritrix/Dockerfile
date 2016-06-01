@@ -12,9 +12,8 @@ ADD https://github.com/Landsbokasafn/heritrix3/archive/${lbs_version}.zip /tmp/
 RUN unzip ${lbs_version}.zip
 WORKDIR /tmp/heritrix3-${lbs_version}
 RUN mvn package -Dmaven.test.skip=true
-# Note:  Using RC2 for now.
-RUN unzip dist/target/heritrix-3.3.0-${lbs_version}-RC2-dist.zip -d /tmp
-RUN mv /tmp/heritrix-3.3.0-${lbs_version}-RC2 /opt/heritrix
+RUN unzip dist/target/heritrix-3.3.0-${lbs_version}-dist.zip -d /tmp
+RUN mv /tmp/heritrix-3.3.0-${lbs_version} /opt/heritrix
 WORKDIR /opt/heritrix
 VOLUME /heritrix-data
 EXPOSE 8443
