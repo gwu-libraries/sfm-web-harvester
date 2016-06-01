@@ -48,9 +48,9 @@ class TestWebHarvester(tests.TestCase):
                     "token": "http://library.gwu.edu/"
                 }
             ],
-            "path": "/collections/test_collection",
-            "collection": {
-                "id": "test_collection"
+            "path": "/collections/test_collection_set",
+            "collection_set": {
+                "id": "test_collection_set"
             },
         }
 
@@ -123,8 +123,8 @@ class TestWebHarvesterIntegration(tests.TestCase):
                 }
             ],
             "path": self.path,
-            "collection": {
-                "id": "test_collection"
+            "collection_set": {
+                "id": "test_collection_set"
 
             }
         }
