@@ -15,7 +15,6 @@ RUN mvn package -Dmaven.test.skip=true
 RUN unzip dist/target/heritrix-3.3.0-${lbs_version}-dist.zip -d /tmp
 RUN mv /tmp/heritrix-3.3.0-${lbs_version} /opt/heritrix
 WORKDIR /opt/heritrix
-VOLUME /heritrix-data
 EXPOSE 8443
 ENV FOREGROUND true
 CMD /opt/heritrix/bin/heritrix --web-admin ${HERITRIX_USER}:${HERITRIX_PASSWORD} --web-bind-hosts 0.0.0.0 --jobs-dir /heritrix-data/jobs

@@ -11,6 +11,8 @@ sfmheritrix:
     environment:
         - HERITRIX_USER=sfm_user
         - HERITRIX_PASSWORD=password
+    volumes_from:
+        - sfmdata
 sfmwebharvester:
     image: gwul/sfm-web-harvester:dev
     links:
@@ -22,5 +24,10 @@ sfmwebharvester:
         - DEBUG=True
         - HERITRIX_CONTACT_URL=http://library.gwu.edu
     volumes_from:
-        - sfmheritrix
+        - sfmdata
     command: bash -c "pip install -r requirements/master.txt --upgrade && appdeps.py --port-wait mq:5672 --port-wait heritrix:8443 && python web_harvester.py --debug=True service mq sfm_user password https://heritrix:8443 sfm_user password http://library.gwu.edu"
+sfmdata:
+    image: ubuntu:14.04
+    command: /bin/true
+    volumes:
+        - /sfm-data
