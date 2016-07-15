@@ -2,6 +2,7 @@ FROM java@sha256:ea18d1cf75d819b8e1b2b9907d671703b8139598829492c315b0305205a2d0f
 #openjdk-7
 MAINTAINER Justin Littman <justinlittman@gwu.edu>
 
+ARG DEBIAN_FRONTEND=noninteractive
 ENV lbs_version LBS-2016-02
 RUN echo "deb http://ftp.debian.org/debian jessie-backports main" >> /etc/apt/sources.list
 RUN apt-get update && apt-get install -y \
