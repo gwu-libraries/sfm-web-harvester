@@ -9,7 +9,6 @@ sfmrabbit:
         - RABBITMQ_DEFAULT_PASS=password
 sfmheritrix:
     image: gwul/sfm-heritrix:master
-    build: heritrix
     ports:
         - "8443:8443"
     environment:

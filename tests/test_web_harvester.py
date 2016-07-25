@@ -113,14 +113,8 @@ class TestWebHarvesterIntegration(tests.TestCase):
             "type": "web",
             "seeds": [
                 {
-                    "token": "http://www.gwu.edu/"
+                    "token": "http://gwu-libraries.github.io/sfm-ui/"
                 },
-                {
-                    "token": "http://library.gwu.edu/"
-                },
-                {
-                    "token": "xhttp://library.gwu.edu/"
-                }
             ],
             "path": self.path,
             "collection_set": {
@@ -149,9 +143,10 @@ class TestWebHarvesterIntegration(tests.TestCase):
             # Success
             self.assertEqual("completed success", result_msg["status"])
             # Some web resources
-            self.assertEqual(8, result_msg["stats"][date.today().isoformat()]["web resources"])
+            self.assertEqual(18, result_msg["stats"][date.today().isoformat()]["web resources"])
 
             # Warc created message.
             bound_warc_created_queue = self.warc_created_queue(connection)
             message_obj = bound_warc_created_queue.get(no_ack=True)
+            print message_obj
             self.assertIsNotNone(message_obj, "No warc created message.")
