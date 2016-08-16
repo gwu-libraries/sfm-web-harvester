@@ -34,7 +34,7 @@ class WebHarvester(BaseHarvester):
         self.heritrix_data_path = heritrix_data_path
 
     def harvest_seeds(self):
-        with codecs.open(os.path.join(self.heritrix_data_path, "seeds.txt"), "w") as f:
+        with codecs.open(os.path.join(self.heritrix_data_path, "seeds.txt"), "w", encoding="utf-8") as f:
             for url in [s["token"] for s in self.message["seeds"]]:
                 f.write(url)
                 f.write("\n")
