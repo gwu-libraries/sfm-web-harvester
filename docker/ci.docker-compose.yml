@@ -1,33 +1,43 @@
-sfmrabbit:
-    image: rabbitmq@sha256:a5180a37b0baebb938ee9d12dd11eed64a909288d7f344e24771278f8a122367
-    #RabbatMQ 3-management
-    environment:
-        - RABBITMQ_DEFAULT_USER=sfm_user
-        - RABBITMQ_DEFAULT_PASS=password
-sfmheritrix:
-    image: gwul/sfm-heritrix:master
-    ports:
-        - "8443:8443"
-    environment:
-        - HERITRIX_USER=sfm_user
-        - HERITRIX_PASSWORD=password
-    volumes_from:
-        - sfmdata
-sfmwebharvester:
-    image: gwul/sfm-web-harvester:dev
-    links:
-        - sfmrabbit:mq
-        - sfmheritrix:heritrix
-    volumes:
-        - "..:/opt/sfm-web-harvester"
-    environment:
-        - DEBUG=True
-        - HERITRIX_CONTACT_URL=http://library.gwu.edu
-    volumes_from:
-        - sfmdata
-    command: bash -c "pip install -r requirements/master.txt --upgrade && appdeps.py --port-wait mq:5672 --port-wait heritrix:8443 && python web_harvester.py --debug=True service mq sfm_user password https://heritrix:8443 sfm_user password http://library.gwu.edu"
-sfmdata:
-    image: ubuntu:14.04
-    command: /bin/true
-    volumes:
-        - /sfm-data
+version: "2"
+services:
+  sfmrabbit:
+      image: rabbitmq@sha256:397382d2b222f3a298a6c74e93f348fb16f9a7fde2c02ba14122624d852daae3
+      environment:
+          - TZ=America/New_York
+          - RABBITMQ_DEFAULT_USER=sfm_user
+          - RABBITMQ_DEFAULT_PASS=password
+  sfmdata:
+      image: ubuntu:14.04
+      command: /bin/true
+      volumes:
+           - /sfm-data
+  sfmheritrix:
+      image: gwul/sfm-heritrix:master
+      ports:
+          - "8443:8443"
+      environment:
+          - HERITRIX_USER=sfm_user
+          - HERITRIX_PASSWORD=password
+      volumes_from:
+          - sfmdata
+  sfmwebharvester:
+      build:
+          context: ..
+          dockerfile: Dockerfile-harvester
+
+#      image: gwul/sfm-web-harvester:master
+      links:
+          - sfmrabbit:mq
+          - sfmheritrix:heritrix
+      volumes:
+          - "..:/opt/sfm-web-harvester"
+      environment:
+          - DEBUG=True
+          - HERITRIX_CONTACT_URL=http://library.gwu.edu
+          - HERITRIX_USER=sfm_user
+          - HERITRIX_PASSWORD=password
+          - SFM_REQS=master
+          - RABBITMQ_USER=sfm_user
+          - RABBITMQ_PASSWORD=password
+      volumes_from:
+          - sfmdata
