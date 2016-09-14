@@ -6,7 +6,7 @@ import tempfile
 import time
 from datetime import datetime, date
 from kombu import Connection, Exchange, Queue, Producer
-from sfmutils.harvester import HarvestResult, EXCHANGE
+from sfmutils.harvester import HarvestResult, EXCHANGE, STATUS_RUNNING, STATUS_SUCCESS
 from mock import patch, call, MagicMock
 from web_harvester import WebHarvester
 import threading
@@ -16,11 +16,11 @@ import os
 
 class TestWebHarvester(tests.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
+        self.working_path = tempfile.mkdtemp()
 
     def tearDown(self):
-        if os.path.exists(self.temp_dir):
-            shutil.rmtree(self.temp_dir)
+        if os.path.exists(self.working_path):
+            shutil.rmtree(self.working_path)
 
     @patch("web_harvester.Hapy", autospec=True)
     def test_harvest(self, mock_hapy_cls):
@@ -30,12 +30,14 @@ class TestWebHarvester(tests.TestCase):
             "job": {"availableActions": {"value": "build, launch, unpause"},
                     "crawlControllerState": "FINISHED",
                     "sizeTotalsReport": {"totalCount": "10"},
-                    "uriTotalsReport": {"downloadedUriCount": 125, "totalUriCount": 125}}}
+                    "uriTotalsReport": {"downloadedUriCount": 125, "totalUriCount": 125},
+                    "primaryConfig": os.path.join(self.working_path, "jobs/sfm/crawler-beans.cxml")
+                }
+            }
 
         harvester = WebHarvester("http://test", "test_username", "test_password", "http://library.gwu.edu",
-                                 heritrix_data_path=self.temp_dir)
-        harvester.harvest_result = HarvestResult()
-        harvester.harvest_result_lock = threading.Lock()
+                                 self.working_path)
+        harvester.result = HarvestResult()
         harvester.message = {
             "id": "test:1",
             "parent_id": "sfmui:45",
@@ -65,25 +67,27 @@ class TestWebHarvester(tests.TestCase):
         config = mock_hapy.mock_calls[2][1][1]
         self.assertTrue(config.startswith("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!--\n  HERITRIX 3 CRAWL JOB"))
         self.assertTrue("http://library.gwu.edu" in config)
-        self.assertTrue(self.temp_dir in config)
+        self.assertTrue(self.working_path in config)
         self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[3])
-        self.assertEqual(call.build_job('sfm'), mock_hapy.mock_calls[4])
-        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[5])
-        self.assertEqual(call.launch_job('sfm'), mock_hapy.mock_calls[6])
-        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[7])
-        self.assertEqual(call.unpause_job('sfm'), mock_hapy.mock_calls[8])
-        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[9])
-        self.assertEqual(call.terminate_job('sfm'), mock_hapy.mock_calls[10])
-        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[11])
+        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[4])
+        self.assertEqual(call.build_job('sfm'), mock_hapy.mock_calls[5])
+        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[6])
+        self.assertEqual(call.launch_job('sfm'), mock_hapy.mock_calls[7])
+        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[8])
+        self.assertEqual(call.unpause_job('sfm'), mock_hapy.mock_calls[9])
+        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[10])
+        self.assertEqual(call.terminate_job('sfm'), mock_hapy.mock_calls[11])
+        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[12])
 
         # Check harvest result
-        self.assertTrue(harvester.harvest_result.success)
-        self.assertEqual(10, harvester.harvest_result.stats_summary()["web resources"])
+        self.assertTrue(harvester.result.success)
+        self.assertEqual(10, harvester.result.stats_summary()["web resources"])
 
 
 @unittest.skipIf(not tests.integration_env_available, "Skipping test since integration env not available.")
 class TestWebHarvesterIntegration(tests.TestCase):
-    def _create_connection(self):
+    @staticmethod
+    def _create_connection():
         return Connection(hostname="mq", userid=tests.mq_username, password=tests.mq_password)
 
     def setUp(self):
@@ -101,10 +105,11 @@ class TestWebHarvesterIntegration(tests.TestCase):
             web_harvester_queue(connection).declare()
             web_harvester_queue(connection).purge()
 
-        self.path = tempfile.mkdtemp()
+        self.harvest_path = tempfile.mkdtemp()
 
     def tearDown(self):
-        shutil.rmtree(self.path, ignore_errors=True)
+        if os.path.exists(self.harvest_path):
+            shutil.rmtree(self.harvest_path)
 
     def test_harvest(self):
         harvest_msg = {
@@ -116,7 +121,7 @@ class TestWebHarvesterIntegration(tests.TestCase):
                     "token": "http://gwu-libraries.github.io/sfm-ui/"
                 },
             ],
-            "path": self.path,
+            "path": self.harvest_path,
             "collection_set": {
                 "id": "test_collection_set"
 
@@ -128,20 +133,25 @@ class TestWebHarvesterIntegration(tests.TestCase):
             producer = Producer(connection, exchange=bound_exchange)
             producer.publish(harvest_msg, routing_key="harvest.start.web")
 
+            # Now wait for status message.
+            status_msg = self._wait_for_message(self.result_queue, connection)
+            # Matching ids
+            self.assertEqual("test:1", status_msg["id"])
+            # Running
+            self.assertEqual(STATUS_RUNNING, status_msg["status"])
+
+            time.sleep(30)
+
+            # Another running message
+            status_msg = self._wait_for_message(self.result_queue, connection)
+            self.assertEqual(STATUS_RUNNING, status_msg["status"])
+
             # Now wait for result message.
-            counter = 0
-            bound_result_queue = self.result_queue(connection)
-            message_obj = None
-            while counter < 240 and not message_obj:
-                time.sleep(.5)
-                message_obj = bound_result_queue.get(no_ack=True)
-                counter += 1
-            self.assertTrue(message_obj, "Timed out waiting for result at {}.".format(datetime.now()))
-            result_msg = message_obj.payload
+            result_msg = self._wait_for_message(self.result_queue, connection)
             # Matching ids
             self.assertEqual("test:1", result_msg["id"])
             # Success
-            self.assertEqual("completed success", result_msg["status"])
+            self.assertEqual(STATUS_SUCCESS, result_msg["status"])
             # Some web resources
             self.assertEqual(18, result_msg["stats"][date.today().isoformat()]["web resources"])
 
@@ -150,3 +160,14 @@ class TestWebHarvesterIntegration(tests.TestCase):
             message_obj = bound_warc_created_queue.get(no_ack=True)
             print message_obj
             self.assertIsNotNone(message_obj, "No warc created message.")
+
+    def _wait_for_message(self, queue, connection):
+        counter = 0
+        message_obj = None
+        bound_result_queue = queue(connection)
+        while counter < 180 and not message_obj:
+            time.sleep(1)
+            message_obj = bound_result_queue.get(no_ack=True)
+            counter += 1
+        self.assertIsNotNone(message_obj, "Timed out waiting for result at {}.".format(datetime.now()))
+        return message_obj.payload
