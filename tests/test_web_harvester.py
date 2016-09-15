@@ -9,7 +9,6 @@ from kombu import Connection, Exchange, Queue, Producer
 from sfmutils.harvester import HarvestResult, EXCHANGE, STATUS_RUNNING, STATUS_SUCCESS
 from mock import patch, call, MagicMock
 from web_harvester import WebHarvester
-import threading
 import hapy
 import os
 
