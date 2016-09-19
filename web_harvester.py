@@ -23,7 +23,7 @@ class WebHarvester(BaseHarvester):
     def __init__(self, heritrix_url, heritrix_username, heritrix_password, contact_url,
                  working_path, mq_config=None, debug=False):
         BaseHarvester.__init__(self, working_path, mq_config=mq_config, debug=debug,
-                               use_warcprox=False)
+                               use_warcprox=False, tries=1)
         with open("crawler-beans.cxml", 'r') as f:
             heritrix_config = f.read()
         self.heritrix_config = heritrix_config.replace("HERITRIX_CONTACT_URL", contact_url).replace(
