@@ -355,8 +355,10 @@ http://example.example/example
  <bean id="dispositionProcessors" class="org.archive.modules.DispositionChain">
   <property name="processors">
    <list>
+    <bean class="org.archive.modules.recrawl.ContentDigestHistoryLoader" />
     <!-- write to aggregate archival files... -->
     <ref bean="warcWriter"/>
+    <bean class="org.archive.modules.recrawl.ContentDigestHistoryStorer" />
     <!-- ...send each outlink candidate URI to CandidateChain,
          and enqueue those ACCEPTed to the frontier... -->
     <ref bean="candidates"/>
@@ -712,6 +714,18 @@ http://example.example/example
       to crawler-beans.cxml file, and tracking crawl files for web UI -->
  <bean id="configPathConfigurer"
    class="org.archive.spring.ConfigPathConfigurer">
+ </bean>
+
+ <!-- Deduping. See https://webarchive.jira.com/wiki/display/Heritrix/Duplication+Reduction+Processors. -->
+ <!-- optional, will use the main bdb module if omitted, just like old dedup -->
+ <bean id="historyBdb" class="org.archive.bdb.BdbModule" autowire-candidate="false">
+   <property name="dir" value="history" />
+ </bean>
+
+ <bean id="contentDigestHistory" class="org.archive.modules.recrawl.BdbContentDigestHistory">
+   <property name="bdbModule">
+     <ref bean="historyBdb" />
+   </property>
  </bean>
 
 </beans>
