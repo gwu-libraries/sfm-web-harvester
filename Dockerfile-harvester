@@ -7,4 +7,4 @@ RUN pip install -r requirements/common.txt -r requirements/release.txt
 
 CMD sh /opt/sfm-setup/setup_reqs.sh \
     && appdeps.py --port-wait mq:5672 --port-wait heritrix:8443 \
-    && python web_harvester.py --debug=$DEBUG service mq $RABBITMQ_USER $RABBITMQ_PASSWORD https://heritrix:8443 $HERITRIX_USER $HERITRIX_PASSWORD $HERITRIX_CONTACT_URL
+    && python web_harvester.py --debug=$DEBUG service mq $RABBITMQ_USER $RABBITMQ_PASSWORD https://heritrix:8443 $HERITRIX_USER $HERITRIX_PASSWORD $HERITRIX_CONTACT_URL /sfm-data/containers/$HOSTNAME

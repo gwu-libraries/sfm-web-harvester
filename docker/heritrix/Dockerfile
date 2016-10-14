@@ -18,4 +18,4 @@ RUN mv /tmp/heritrix-3.3.0-${lbs_version} /opt/heritrix
 WORKDIR /opt/heritrix
 EXPOSE 8443
 ENV FOREGROUND true
-CMD /opt/heritrix/bin/heritrix --web-admin ${HERITRIX_USER}:${HERITRIX_PASSWORD} --web-bind-hosts 0.0.0.0 --jobs-dir /sfm-data/heritrix-data/jobs
+CMD /opt/heritrix/bin/heritrix --web-admin ${HERITRIX_USER}:${HERITRIX_PASSWORD} --web-bind-hosts 0.0.0.0 --jobs-dir /sfm-data/containers/$HOSTNAME/jobs
