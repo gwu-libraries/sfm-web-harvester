@@ -3,12 +3,13 @@ from sfmutils.consumer import MqConfig, EXCHANGE
 import logging
 import argparse
 import sys
-from hapy import Hapy, HapyException
+from hapy import Hapy
 import codecs
 import time
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import os
+import shutil
 
 log = logging.getLogger(__name__)
 
@@ -24,64 +25,106 @@ class WebHarvester(BaseHarvester):
                  working_path, mq_config=None, debug=False):
         BaseHarvester.__init__(self, working_path, mq_config=mq_config, debug=debug,
                                use_warcprox=False, tries=1)
+        # Read crawl configuration file
         with open("crawler-beans.cxml", 'r') as f:
             heritrix_config = f.read()
+        # Replace contact url and data path
         self.heritrix_config = heritrix_config.replace("HERITRIX_CONTACT_URL", contact_url).replace(
             "HERITRIX_DATA_PATH", working_path)
         log.debug("Heritrix config is: %s", self.heritrix_config)
+
         self.client = Hapy(heritrix_url, username=heritrix_username, password=heritrix_password)
 
+        # Create a dummy job to allow looking up the directory that Heritrix is writing to.
+        # This directory is in the Heritrix container's working path.
+        self.client.create_job(JOB_NAME)
+        self.jobs_dir = self._get_jobs_dir(JOB_NAME)
+        log.debug("Jobs dir is %s", self.jobs_dir)
+
+        self.job_dir = None
+        self.job_state_dir = None
+        self.job_name = None
+
     def harvest_seeds(self):
+        # Write out the seed file
         with codecs.open(os.path.join(self.working_path, "seeds.txt"), "w", encoding="utf-8") as f:
             for url in [s["token"] for s in self.message["seeds"]]:
                 f.write(url)
                 f.write("\n")
 
-        log.debug("Tearing down")
-        try:
-            self.client.teardown_job(JOB_NAME)
-        except HapyException:
-            # Job doesn't exist
-            pass
+        # The collection id is used as the job name
+        self.job_name = self.message["collection"]["id"]
 
-        log.debug("Creating job")
-        self.client.create_job(JOB_NAME)
+        # The job dir is where Heritrix reads/writes job data
+        self.job_dir = os.path.join(self.jobs_dir, self.job_name)
+        log.debug("Job dir is %s", self.job_dir)
 
-        log.debug("Submitting configuration")
-        self.client.submit_configuration(JOB_NAME, self.heritrix_config)
-        wait_for(self.client, JOB_NAME, available_action='build')
+        # The warc temp dir is where Heritrix writes WARC files.
+        # The harvester will scan this dir for the WARC files.
+        self.warc_temp_dir = os.path.join(self.job_dir, "latest/warcs")
+        log.debug("Warc temp dir is %s", self.warc_temp_dir)
 
-        # This will get the directory that is being used by Heritrix.
-        self.warc_temp_dir = self._get_warc_temp_dir()
+        # The job state dir is where the job data is persisted between harvests.
+        # It's moved to the collection path so that it does not depend on the containers.
+        # This also means that useful files such as crawl reports are kept.
+        self.job_state_dir = os.path.join(self.message["path"], "heritrix_job")
+        log.debug("Job state dir is %s", self.job_state_dir)
+
+        # Copy job state dir if it exists
+        if os.path.exists(self.job_state_dir):
+            if os.path.exists(self.job_dir):
+                shutil.rmtree(self.job_dir)
+            log.debug("Copying job from %s to %s", self.job_state_dir, self.job_dir)
+            shutil.copytree(self.job_state_dir, self.job_dir, symlinks=True)
+        else:
+            # Otherwise, create a new job
+            log.debug("Creating job")
+            self.client.create_job(self.job_name)
+
+            log.debug("Submitting configuration")
+            self.client.submit_configuration(self.job_name, self.heritrix_config)
+            wait_for(self.client, self.job_name, available_action='build')
 
         log.debug("Building job")
-        self.client.build_job(JOB_NAME)
-        wait_for(self.client, JOB_NAME, available_action='launch')
+        self.client.build_job(self.job_name)
+        wait_for(self.client, self.job_name, available_action='launch')
 
         log.debug("Launching")
-        self.client.launch_job(JOB_NAME)
-        wait_for(self.client, JOB_NAME, available_action='unpause')
+        self.client.launch_job(self.job_name)
+        wait_for(self.client, self.job_name, available_action='unpause')
 
         log.info("Unpausing")
-        self.client.unpause_job(JOB_NAME)
+        self.client.unpause_job(self.job_name)
+
         # Wait up to a day
-        wait_for(self.client, JOB_NAME, controller_state="FINISHED", retries=60*60*24/30, sleep_secs=30)
+        wait_for(self.client, self.job_name, controller_state="FINISHED", retries=60*60*24/30, sleep_secs=30)
 
         log.info("Terminating")
-        self.client.terminate_job(JOB_NAME)
+        self.client.terminate_job(self.job_name)
+        wait_for(self.client, self.job_name, available_action='teardown')
+
+        # Get stats
+        job_info = self.client.get_job_info(self.job_name)
+        self.result.increment_stats("web resources", count=int(job_info["job"]["sizeTotalsReport"]["novelCount"]))
+
+        self.client.teardown_job(self.job_name)
+        wait_for(self.client, self.job_name, available_action='build')
 
         log.info("Harvesting done")
 
-        job_info = self.client.get_job_info(JOB_NAME)
-        self.result.increment_stats("web resources", count=int(job_info["job"]["sizeTotalsReport"]["totalCount"]))
-
-    # def _create_warc_temp_dir(self):
-    #     return os.path.join(self.working_path, "jobs/sfm/latest/warcs")
-
-    def _get_warc_temp_dir(self):
-        info = self.client.get_job_info(JOB_NAME)
+    def _get_jobs_dir(self, job_name):
+        info = self.client.get_job_info(job_name)
         # "primaryConfig": "/sfm-data/containers/65a88d0e0cda/jobs/sfm/crawler-beans.cxml",
-        return os.path.join(os.path.dirname(info['job']['primaryConfig']), "latest/warcs")
+        return os.path.dirname(os.path.dirname(info['job']['primaryConfig']))
+
+    def _finish_processing(self):
+        BaseHarvester._finish_processing(self)
+        # Move job from job_dir to job_state_dir
+        if os.path.exists(self.job_state_dir):
+            log.debug("Deleting job state directory")
+            shutil.rmtree(self.job_state_dir)
+        log.debug("Moving job from %s to %s", self.job_dir, self.job_state_dir)
+        shutil.move(self.job_dir, self.job_state_dir)
 
 
 def wait_for(h, job_name, available_action=None, controller_state=None, retries=60, sleep_secs=1):
