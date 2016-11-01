@@ -44,6 +44,7 @@ class WebHarvester(BaseHarvester):
         self.job_dir = None
         self.job_state_dir = None
         self.job_name = None
+        self.collection_path = None
 
     def harvest_seeds(self):
         # Write out the seed file
@@ -67,7 +68,8 @@ class WebHarvester(BaseHarvester):
         # The job state dir is where the job data is persisted between harvests.
         # It's moved to the collection path so that it does not depend on the containers.
         # This also means that useful files such as crawl reports are kept.
-        self.job_state_dir = os.path.join(self.message["path"], "heritrix_job")
+        self.collection_path = self.message["path"]
+        self.job_state_dir = os.path.join(self.collection_path, "heritrix_job")
         log.debug("Job state dir is %s", self.job_state_dir)
 
         # Copy job state dir if it exists
@@ -123,6 +125,9 @@ class WebHarvester(BaseHarvester):
         if os.path.exists(self.job_state_dir):
             log.debug("Deleting job state directory")
             shutil.rmtree(self.job_state_dir)
+        if not os.path.exists(self.collection_path):
+            log.debug("Creating collection path")
+            os.makedirs(self.collection_path)
         log.debug("Moving job from %s to %s", self.job_dir, self.job_state_dir)
         shutil.move(self.job_dir, self.job_state_dir)
 

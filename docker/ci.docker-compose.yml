@@ -21,11 +21,7 @@ services:
       volumes_from:
           - sfmdata
   sfmwebharvester:
-      build:
-          context: ..
-          dockerfile: Dockerfile-harvester
-
-#      image: gwul/sfm-web-harvester:master
+      image: gwul/sfm-web-harvester:master
       links:
           - sfmrabbit:mq
           - sfmheritrix:heritrix

@@ -26,9 +26,9 @@ class TestWebHarvester(tests.TestCase):
         mock_hapy = MagicMock(spec=hapy.Hapy)
         mock_hapy_cls.side_effect = [mock_hapy]
         mock_hapy.get_job_info.return_value = {
-            "job": {"availableActions": {"value": "build, launch, unpause"},
+            "job": {"availableActions": {"value": "build, launch, unpause, teardown"},
                     "crawlControllerState": "FINISHED",
-                    "sizeTotalsReport": {"totalCount": "10"},
+                    "sizeTotalsReport": {"totalCount": "10", "novelCount": "10"},
                     "uriTotalsReport": {"downloadedUriCount": 125, "totalUriCount": 125},
                     "primaryConfig": os.path.join(self.working_path, "jobs/sfm/crawler-beans.cxml")
                 }
@@ -53,30 +53,32 @@ class TestWebHarvester(tests.TestCase):
             "collection_set": {
                 "id": "test_collection_set"
             },
+            "collection": {
+                "id": "test_collection"
+            }
         }
 
         harvester.harvest_seeds()
 
         mock_hapy_cls.assert_called_once_with("http://test", username="test_username", password="test_password")
-        # print mock_hapy.mock_calls
-        self.assertEqual(call.teardown_job("sfm"), mock_hapy.mock_calls[0])
-        self.assertEqual(call.create_job("sfm"), mock_hapy.mock_calls[1])
-        self.assertEqual("submit_configuration", mock_hapy.mock_calls[2][0])
-        self.assertEqual("sfm", mock_hapy.mock_calls[2][1][0])
-        config = mock_hapy.mock_calls[2][1][1]
+        self.assertEqual(call.create_job("sfm"), mock_hapy.mock_calls[0])
+        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[1])
+        self.assertEqual(call.create_job("test_collection"), mock_hapy.mock_calls[2])
+        self.assertEqual("submit_configuration", mock_hapy.mock_calls[3][0])
+        self.assertEqual("test_collection", mock_hapy.mock_calls[3][1][0])
+        config = mock_hapy.mock_calls[3][1][1]
         self.assertTrue(config.startswith("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!--\n  HERITRIX 3 CRAWL JOB"))
         self.assertTrue("http://library.gwu.edu" in config)
         self.assertTrue(self.working_path in config)
-        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[3])
-        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[4])
-        self.assertEqual(call.build_job('sfm'), mock_hapy.mock_calls[5])
-        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[6])
-        self.assertEqual(call.launch_job('sfm'), mock_hapy.mock_calls[7])
-        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[8])
-        self.assertEqual(call.unpause_job('sfm'), mock_hapy.mock_calls[9])
-        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[10])
-        self.assertEqual(call.terminate_job('sfm'), mock_hapy.mock_calls[11])
-        self.assertEqual(call.get_job_info('sfm'), mock_hapy.mock_calls[12])
+        self.assertEqual(call.get_job_info('test_collection'), mock_hapy.mock_calls[4])
+        self.assertEqual(call.build_job('test_collection'), mock_hapy.mock_calls[5])
+        self.assertEqual(call.get_job_info('test_collection'), mock_hapy.mock_calls[6])
+        self.assertEqual(call.launch_job('test_collection'), mock_hapy.mock_calls[7])
+        self.assertEqual(call.get_job_info('test_collection'), mock_hapy.mock_calls[8])
+        self.assertEqual(call.unpause_job('test_collection'), mock_hapy.mock_calls[9])
+        self.assertEqual(call.get_job_info('test_collection'), mock_hapy.mock_calls[10])
+        self.assertEqual(call.terminate_job('test_collection'), mock_hapy.mock_calls[11])
+        self.assertEqual(call.get_job_info('test_collection'), mock_hapy.mock_calls[12])
 
         # Check harvest result
         self.assertTrue(harvester.result.success)
@@ -124,6 +126,9 @@ class TestWebHarvesterIntegration(tests.TestCase):
             "collection_set": {
                 "id": "test_collection_set"
 
+            },
+            "collection": {
+                "id": "test_collection"
             }
         }
 
@@ -152,12 +157,11 @@ class TestWebHarvesterIntegration(tests.TestCase):
             # Success
             self.assertEqual(STATUS_SUCCESS, result_msg["status"])
             # Some web resources
-            self.assertEqual(18, result_msg["stats"][date.today().isoformat()]["web resources"])
+            self.assertEqual(15, result_msg["stats"][date.today().isoformat()]["web resources"])
 
             # Warc created message.
             bound_warc_created_queue = self.warc_created_queue(connection)
             message_obj = bound_warc_created_queue.get(no_ack=True)
-            print message_obj
             self.assertIsNotNone(message_obj, "No warc created message.")
 
     def _wait_for_message(self, queue, connection):
