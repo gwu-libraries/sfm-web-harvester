@@ -193,8 +193,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Logging
-    logging.basicConfig(format='%(asctime)s: %(name)s --> %(message)s',
-                        level=logging.DEBUG if args.debug else logging.INFO)
+    logging.getLogger().setLevel(logging.DEBUG if args.debug else logging.INFO)
     logging.getLogger("requests").setLevel(logging.DEBUG if args.debug else logging.INFO)
 
     if args.command == "service":
