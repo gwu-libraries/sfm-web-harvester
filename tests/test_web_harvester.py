@@ -106,13 +106,14 @@ class TestWebHarvesterIntegration(tests.TestCase):
             web_harvester_queue(connection).declare()
             web_harvester_queue(connection).purge()
 
-        self.harvest_path = tempfile.mkdtemp()
+        self.harvest_path = None
 
     def tearDown(self):
-        if os.path.exists(self.harvest_path):
+        if self.harvest_path and os.path.exists(self.harvest_path):
             shutil.rmtree(self.harvest_path)
 
     def test_harvest(self):
+        self.harvest_path = "/sfm-data/collection_set/test_collection/test_1"
         harvest_msg = {
             "id": "test:1",
             "parent_id": "sfmui:45",
