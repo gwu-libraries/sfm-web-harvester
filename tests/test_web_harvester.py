@@ -158,7 +158,7 @@ class TestWebHarvesterIntegration(tests.TestCase):
             # Success
             self.assertEqual(STATUS_SUCCESS, result_msg["status"])
             # Some web resources
-            self.assertEqual(18, result_msg["stats"][date.today().isoformat()]["web resources"])
+            self.assertTrue(result_msg["stats"][date.today().isoformat()]["web resources"])
 
             # Warc created message.
             bound_warc_created_queue = self.warc_created_queue(connection)
