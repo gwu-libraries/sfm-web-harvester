@@ -49,7 +49,7 @@ class WebHarvester(BaseHarvester):
     def harvest_seeds(self):
         # Write out the seed file
         with codecs.open(os.path.join(self.working_path, "seeds.txt"), "w", encoding="utf-8") as f:
-            for url in [s["token"] for s in self.message["seeds"]]:
+            for url in [s["token"] for s in self.message["seeds"] if s["token"]]:
                 f.write(url)
                 f.write("\n")
 
