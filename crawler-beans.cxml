@@ -527,6 +527,7 @@ http://example.example/example
    <value>http://(com,flickr,</value>
    <value>http://(com,staticflickr,</value>
    <value>http://(ly,bit,</value>
+   <value>http://(com,tumblr,media,</value>
   </list>
  </property>
  <property name='targetSheetNames'>
