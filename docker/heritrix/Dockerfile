@@ -29,11 +29,9 @@ WORKDIR /tmp/heritrix3-${lbs_version}
 RUN mvn package -Dmaven.test.skip=true
 RUN unzip dist/target/heritrix-3.3.0-${lbs_version}-dist.zip -d /tmp
 RUN mv /tmp/heritrix-3.3.0-${lbs_version} /tmp/heritrix
+ADD start.sh /usr/local/bin/heritrix_start.sh
+RUN chmod +x /usr/local/bin/heritrix_start.sh
+
 EXPOSE 8443
 ENV FOREGROUND true
-# The late copying and chmoding below is dues to https://github.com/docker/docker/issues/1295
-CMD groupadd -r sfm --gid=$SFM_GID && useradd -r -g sfm --uid=$SFM_UID sfm \
-    && cp -r /tmp/heritrix /opt/heritrix \
-    && chown -R sfm:sfm /opt/heritrix \
-    && chmod -R u+x /opt/heritrix/bin \
-    && gosu sfm /opt/heritrix/bin/heritrix --web-admin ${HERITRIX_USER}:${HERITRIX_PASSWORD} --web-bind-hosts 0.0.0.0 --jobs-dir /sfm-data/containers/$HOSTNAME/jobs
+CMD /usr/local/bin/heritrix_start.sh
