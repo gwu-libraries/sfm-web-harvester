@@ -80,18 +80,18 @@ class WebHarvester(BaseHarvester):
             shutil.copytree(self.job_state_dir, self.job_dir, symlinks=True)
         else:
             # Otherwise, create a new job
-            log.debug("Creating job")
+            log.info("Creating job")
             self.client.create_job(self.job_name)
 
-            log.debug("Submitting configuration")
+            log.info("Submitting configuration")
             self.client.submit_configuration(self.job_name, self.heritrix_config)
             wait_for(self.client, self.job_name, available_action='build')
 
-        log.debug("Building job")
+        log.info("Building job")
         self.client.build_job(self.job_name)
         wait_for(self.client, self.job_name, available_action='launch')
 
-        log.debug("Launching")
+        log.info("Launching")
         self.client.launch_job(self.job_name)
         wait_for(self.client, self.job_name, available_action='unpause')
 
@@ -141,11 +141,15 @@ def wait_for(h, job_name, available_action=None, controller_state=None, retries=
     count = 0
     while count <= retries:
         info = h.get_job_info(job_name)
-        log.debug("Crawl controller state: %s. Available actions: %s. Downloaded %s of %s URIs.",
-                  info['job'].get('crawlControllerState'),
-                  info['job']['availableActions']['value'],
-                  (info['job']['uriTotalsReport'] or {}).get('downloadedUriCount', 0),
-                  (info['job']['uriTotalsReport'] or {}).get('totalUriCount', 0))
+        msg = "Crawl controller state: {}. Available actions: {}. Downloaded {} of {} URIs.".format(
+            info['job'].get('crawlControllerState'),
+            info['job']['availableActions']['value'],
+            (info['job']['uriTotalsReport'] or {}).get('downloadedUriCount', 0),
+            (info['job']['uriTotalsReport'] or {}).get('totalUriCount', 0))
+        if not count % 10:
+            log.info(msg)
+        else:
+            log.debug(msg)
         if available_action and available_action in info['job']['availableActions']['value']:
             break
         elif controller_state and controller_state == info['job'].get('crawlControllerState'):
@@ -194,7 +198,7 @@ if __name__ == "__main__":
 
     # Logging
     logging.getLogger().setLevel(logging.DEBUG if args.debug else logging.INFO)
-    logging.getLogger("requests").setLevel(logging.DEBUG if args.debug else logging.INFO)
+    logging.getLogger("requests").setLevel(logging.DEBUG if args.debug else logging.WARNING)
 
     if args.command == "service":
         harvester = WebHarvester(args.heritrix_url, args.heritrix_username, args.heritrix_password, args.contact_url,
