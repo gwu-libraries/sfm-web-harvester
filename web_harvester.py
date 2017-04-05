@@ -83,9 +83,9 @@ class WebHarvester(BaseHarvester):
             log.info("Creating job")
             self.client.create_job(self.job_name)
 
-            log.info("Submitting configuration")
-            self.client.submit_configuration(self.job_name, self.heritrix_config)
-            wait_for(self.client, self.job_name, available_action='build')
+        log.info("Submitting configuration")
+        self.client.submit_configuration(self.job_name, self.heritrix_config)
+        wait_for(self.client, self.job_name, available_action='build')
 
         log.info("Building job")
         self.client.build_job(self.job_name)
@@ -181,6 +181,7 @@ if __name__ == "__main__":
     service_parser.add_argument("heritrix_password", help="The password for Heritrix")
     service_parser.add_argument("contact_url", help="The contact URL to provide when harvesting")
     service_parser.add_argument("working_path")
+    service_parser.add_argument("--skip-resume", action="store_true")
 
     seed_parser = subparsers.add_parser("seed", help="Harvest based on a seed file.")
     seed_parser.add_argument("filepath", help="Filepath of the seed file.")
@@ -205,6 +206,8 @@ if __name__ == "__main__":
                                  args.working_path,
                                  mq_config=MqConfig(args.host, args.username, args.password, EXCHANGE,
                                                     {QUEUE: (ROUTING_KEY,)}))
+        if not args.skip_resume:
+            harvester.resume_from_file()
         harvester.run()
     elif args.command == "seed":
         main_mq_config = MqConfig(args.host, args.username, args.password, EXCHANGE, None) \
