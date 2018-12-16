@@ -3,7 +3,7 @@ A wrapper around Heritrix for harvesting web content as part of [Social Feed Man
 
 [![Build Status](https://travis-ci.org/gwu-libraries/sfm-web-harvester.svg?branch=master)](https://travis-ci.org/gwu-libraries/sfm-web-harvester)
 
-__As of SFM 1.12, sfm-elk is deprecated.__
+__As of SFM 1.12, sfm-web-harvester is deprecated.__
 
 ## Installing
     git clone https://github.com/gwu-libraries/sfm-web-harvester.git
